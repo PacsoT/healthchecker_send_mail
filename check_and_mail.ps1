@@ -1,9 +1,19 @@
-﻿cls
+﻿param (
+   [switch]$Testing = $false,
+   [switch]$Verbose = $true,
+   [switch]$DumpOccurances = $false
+)
 
-$testing= $true;
+
+cls
 
 $health_checker_file_location = ".\ExchangeAllServersReport.html"
+
 $exceptions_file_location = ".\exceptions.csv"
+if (-not(Test-Path $exceptions_file_location -PathType Leaf)) 
+ {
+  $DumpOccurances=$true
+ } 
 
 
 
@@ -32,7 +42,7 @@ $end_key="</td>"
 $next_start_key_index = 0;
 $next_end_key_index = 1;
 
-$custom_certificate_warning_treshold = 10;     # The Health Checker cries about certificates 30 days before it expires, here we can plower that number...
+$custom_certificate_warning_treshold = 10;     # A health checker 30 nap után nyávog a tanusítvány lejárat előtt, de ezt mi itt felülbírálhatjuk...
 
 $occurances = @();
 $exceptions = @();
@@ -45,19 +55,17 @@ For ($i=0; $i -lt $total_number_of_occurances; $i++)
   $next_end_key_index = $the_text.IndexOf($end_key,$next_start_key_index)
   $occurances += $the_text.Substring($next_start_key_index+$start_key.Length,$next_end_key_index-$next_start_key_index-$start_key.Length)
   
-  if($testing)
+  if($Verbose)
    {
-    $next_start_key_index;
-    $next_end_key_index;
-   } 
- } 
+    Write-host "Found one between "$next_start_key_index, " and ", $next_end_key_index;
+   }
+ }
 
 
-if($testing)
+if($Verbose)
  {
-  $occurances.Count
-  $total_number_of_occurances;
-
+  Write-host "Number of the Occurances array"$occurances.Count
+  
   Foreach($occ in $occurances)
    {
     Write-host "Occurance"
@@ -68,29 +76,53 @@ if($testing)
    }
  }
 
+if($DumpOccurances)
+ {
+  $occurances |Select-Object -unique @{Name='Name';Expression={$_}} | Export-Csv -NoTypeInformation -Path $exceptions_file_location
+  Write-host "I did not find the exceptions file, or I may have been instructed, to dump all occurances to the exceptions file... whatever."
+  Write-Host "All occuraances have been dumped to: ",$exceptions_file_location
+  Write-host
+  Write-host "You may want to have a look at the file, and run the script again."
+  exit;
+ }
+
+
 $exceptions_obj= Import-Csv -Path $exceptions_file_location
 foreach ($exc in $exceptions_obj) {$exceptions+=$exc.Name}
 $we_found_new_errors = $false;
 
 For ($i=0; $i -lt $total_number_of_occurances; $i++)
  {
-  if (-not("" -eq ($occurances[$i]))) # megvizsgáljuk, hogy üres string-e a $occ...
+  if (-not("" -eq ($occurances[$i]))) # Chack if $occ is not empty
    {
-    if (-not ($null -eq ($occurances[$i] -as [int])))      #megvizsgaljuk, hogy szám-e az $occ...
+    if (-not ($null -eq ($occurances[$i] -as [int])))      #check if $occ is a number
      {
-      if (($occurances[$i] -as [int])-le $custom_certificate_warning_treshold)         #megvizsgáljuk, hogy alacsonyabb-e az érték, mint a mi egyedi érték
+      if (($occurances[$i] -as [int])-le $custom_certificate_warning_treshold)         #check if $occ is smaller than our custom certificate warning number...
        {
         $we_found_new_errors=$true;
         $found_errors += $occurances[$i]
+        If($Verbose)
+         {
+          Write-Host "This number is smaller than we would like it to have. We have an error!"
+          Write-Host $occurances[$i] -ForegroundColor Gray 
+          Write-host "===================" -ForegroundColor White
+          Write-host
+         }
        }
      }
-    else    # valami számmá nem alakítható érték van az $occ-ben...
+    else    # We have something in $occ which cannot be coverted into a number...
      {
-      if(-not($exceptions.Contains($occurances[$i])))        # Megvizsgáljuk, hogy az érték bvenne van-e a kivételek listájába...
+      if(-not($exceptions.Contains($occurances[$i])))        # Here is the ggod stuff, we chack if $occ is listed as an exception or not...
        {
         $we_found_new_errors=$true;
         $found_errors += $occurances[$i]
-        
+        If($Verbose)
+         {
+          Write-Host "We have something:"
+          Write-Host $occurances[$i] -ForegroundColor Gray 
+          Write-host "===================" -ForegroundColor White
+          Write-host
+         }
        } 
      }
     }
@@ -101,13 +133,13 @@ For ($i=0; $i -lt $total_number_of_occurances; $i++)
  
 if($we_found_new_errors)
  {
-  if($testing)
+  if($Verbose)
    {
     Write-host "We're gon' send an e-mail, because we found some new errors!"
    }
 
-  $From = "user@comany.com"
-  $Subject = "Cause for concern was found on the Exchange server"
+  $From = "adminreport@smp.hu"
+  $Subject = "Cause for concern was found on the SMP Exchange server"
 
   $SMTPServer = "localhost"
   $SMTPPort = "25"
@@ -115,15 +147,16 @@ if($we_found_new_errors)
   
 
   
-  if($testing)
+  if($Testing)
    {
-    $to = "tamas.pacso@smp.hu"
+    $to = "tamas.pacso@.hu"
    }
   else
    {
     $to = "support@silicondirect.net"
    }
 
+# From here we start assembling the e-mails HTML body.
 
    $body = @'
              <h2 style="font-family:Corbel"> <b>Hi!</b> Unfortunatelly I found some errors on the Exchange server! </h2>
@@ -155,6 +188,10 @@ foreach($exc in $exceptions)
   Send-MailMessage -From $From -to $To -Subject $Subject -Body $body -BodyAsHtml -SmtpServer $SMTPServer -Port $SMTPPort  -Encoding UTF8 -Attachments $health_checker_file_location
  
  
+ } 
+else
+ {
+  Write-Host "We did not find any errors on the exchange system, or all errors have been excused in the exceptions file. Hurray!"
  }
 
   
@@ -166,16 +203,16 @@ foreach($exc in $exceptions)
 
   #
  ###
- ###   Useful command repository
+ ###   Useful command repository. Stuff I wanted to keep, so I don't have to figure them out again...
  ###
   #
   #
-  ##  With this, we can export all occurances, so we can create the exceptions file...
+  ##  With this, we can export all occurances from a report, For example if we want to create an exceptions file...
   #
   ### $occurances |Select-Object -unique @{Name='Name';Expression={$_}} | Export-Csv -NoTypeInformation -Path $exceptions_file_location
 
   #
   #
-  ##   Ha csak a riportoto akarjuk elküldeni
+  ##   If we wanna send only the report, but not the summary.
   #   
   ###  Send-MailMessage -From $From -to $To -Subject $Subject -Body $the_text -BodyAsHtml -SmtpServer $SMTPServer -Port $SMTPPort  -Encoding UTF8
