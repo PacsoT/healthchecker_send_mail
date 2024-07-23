@@ -40,9 +40,8 @@ $SMTPPort = "25"
 #             Here be dragons                              #
 ############################################################
 
+
 cls
-
-
 
 if (-not(Test-Path $exceptions_file_location -PathType Leaf)) 
  {
@@ -81,12 +80,13 @@ $total_number_of_occurances = (Select-String -Path $health_checker_file_location
 
 
 
+$next_start_key_index = 0;
+$next_end_key_index = 1;
+
 
 $occurances = @();
 $exceptions = @();
 $found_errors = @();
-$next_start_key_index = 0;
-$next_end_key_index = 1;
 
 
 For ($i=0; $i -lt $total_number_of_occurances; $i++)
@@ -144,14 +144,12 @@ For ($i=0; $i -lt $total_number_of_occurances; $i++)
       if (($occurances[$i] -as [int]) -le $custom_certificate_warning_treshold)         #check if $occ is smaller than our custom certificate warning number...
        {
         $we_found_new_errors=$true;
-        $found_errors += $occurances[$i]
-        If($Verbose)
-         {
-          Write-Host "This number is smaller than we would like it to have. We have an error!"
-          Write-Host $occurances[$i] -ForegroundColor Gray 
-          Write-host "===================" -ForegroundColor White
-          Write-host
-         }
+        $found_errors += "A certificate is about to expire in " + $occurances[$i] + " days."
+        Write-Verbose "This number is smaller than we would like it to have. We have an error!"
+        Write-Verbose $occurances[$i]
+        Write-Verbose "==================="
+        Write-Verbose ""
+        
        }
      }
     else    # We have something in $occ which cannot be coverted into a number...
@@ -160,13 +158,10 @@ For ($i=0; $i -lt $total_number_of_occurances; $i++)
        {
         $we_found_new_errors=$true;
         $found_errors += $occurances[$i]
-        If($Verbose)
-         {
-          Write-Host "We have something:" -ForegroundColor White
-          Write-Host $occurances[$i] -ForegroundColor Gray 
-          Write-host "===================" -ForegroundColor White
-          Write-host
-         }
+        Write-Verbose "We have something:"
+        Write-Verbose $occurances[$i] 
+        Write-Verbose "===================" 
+        Write-Verbose ""
        } 
      }
     }
@@ -177,15 +172,12 @@ For ($i=0; $i -lt $total_number_of_occurances; $i++)
  
 if($we_found_new_errors)
  {
-  if($Verbose)
-   {
-    Write-host "We're gon' send an e-mail, because we found some new errors!"
-   }
-  
-
+  Write-Verbose "We're gon' send an e-mail, because we found some new errors!"
   
 
 
+  
+  
 # From here we start assembling the e-mails HTML body.
 
    $body = "<h2 style=""font-family:Corbel""> <b>Hi!</b> Unfortunatelly I found some errors on the "+$env:COMPUTERNAME+" Exchange server! </h2>"
@@ -200,8 +192,6 @@ if($we_found_new_errors)
     $body+= "<li style=""font-family:'Century Gothic';color:#993333"">"+ $err +"</li>"
    }
   $body+="</ul>"
-
-  $body+= "<p style=""font-family:Corbel""If you see numbers as ""Concerning messages"" that is most likely reffer to certificates closing on to their expiration date. </p>"
 
   $body+= "<p style=""font-family:Corbel; padding-top:30px; align:center"">And here is the complete list of texts we have choosen to ignore: </p>"
   $body+= "<ul>"
@@ -238,7 +228,7 @@ if($we_found_new_errors)
  } 
 else
  {
-  Write-Host "We did not find any errors on the Exchange system, or all errors have been excused in the exceptions file. Hurray!"
+  Write-Verbose "We did not find any errors on the Exchange system, or all errors have been excused in the exceptions file. Hurray!"
 
   $log_entry   = Get-Date -Format "yyyy.mm.dd HH:mm:ss"
   $log_entry  += ' No errors, or all have been exused... exiting.';
@@ -256,6 +246,12 @@ else
  ###
  ###   Useful command repository. Stuff I wanted to keep, so I don't have to figure them out again...
  ###
+ ###
+ ###
+ ###
+ ###
+ ###
+
   #
   #
   ##  With this, we can export all occurances from a report, For example if we want to create an exceptions file...
